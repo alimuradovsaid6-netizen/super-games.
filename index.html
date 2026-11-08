@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Okul 3D Nişan Oyunu</title>
+    <!-- Three.js Kütüphanesi -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+        body { background: #0f172a; color: #f8fafc; text-align: center; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px; }
+        h1 { margin-bottom: 5px; color: #38bdf8; font-size: 2.2rem; text-transform: uppercase; letter-spacing: 1px; }
+        p.subtitle { color: #94a3b8; margin-bottom: 20px; font-size: 1rem; }
+        
+        .game-container { position: relative; background: #1e293b; border: 3px solid #334155; border-radius: 12px; padding: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; align-items: center; width: 840px; max-width: 95vw; }
+        
+        canvas { background: #020617; border-radius: 8px; display: block; }
+        
+        .score-board { display: flex; gap: 20px; font-size: 1.3rem; font-weight: bold; margin-bottom: 12px; color: #4ade80; }
+        .controls-hint { margin-top: 15px; font-size: 0.9rem; color: #cbd5e1; background: #0f172a; padding: 10px 15px; border-radius: 6px; border: 1px solid #334155; width: 100%; }
+
+        .crosshair { position: absolute; top: 50%; left: 50%; width: 12px; height: 12px; background: rgba(255, 255, 255, 0.9); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; border: 1px solid #000; display: none; z-index: 5; }
+        .click-to-play { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); color: #38bdf8; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 1.6rem; font-weight: bold; cursor: pointer; border-radius: 8px; z-index: 10; text-align: center; padding: 20px; }
+        
+        .btn-fullscreen { margin-top: 15px; background: #334155; border: none; color: #94a3b8; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-fullscreen:hover { background: #475569; color: #fff; }
+    </style>
+</head>
+<body>
+
+    <h1>🎯 3D BOT SAVAŞLARI</h1>
+    <p class="subtitle">Okul bilgisayarları için özel 3D Nişan Oyunu!</p>
+
+    <div class="game-container" id="mainContainer">
+        <div id="gameOverlay" class="click-to-play" onclick="startGame()">
+            ▶ OYNAMAK İÇİN TIKLA
+            <span style="font-size:1rem; color:#94a3b8; margin-top:10px; font-weight:normal;">(Fare kilitlenir, W,A,S,D ile hareket et, Sol Tık ile ateş et!)</span>
+        </div>
+        <div class="crosshair" id="gameCrosshair"></div>
+        <div class="score-board">Vurulan Bot: <span id="score">0</span></div>
+        <div id="canvasContainer"></div>
+        <div class="controls-hint">⌨️ <b>Kontroller:</b> W,A,S,D - Yürüme | Fare - Nişan Alma | Sol Tık - Ateş Et | ESC - Fareyi Serbest Bırak</div>
+        <button class="btn-fullscreen" onclick="toggleFullscreen()">🖥️ Tam Ekran Modu</button>
+    </div>
+
+    <script>
+        let scene, camera, renderer, animId;
+        let bots = [];
+        let score = 0;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let raycaster, mouse;
+
+        const container = document.getElementById('canvasContainer');
+
+        function initGame() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f172a);
+            scene.fog = new THREE.FogExp2(0x0f172a, 0.035);
+
+            camera = new THREE.PerspectiveCamera(75, 780 / 420, 0.1, 1000);
+            camera.position.set(0, 1.6, 10);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(780, 420);
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            dirLight.position.set(10, 20, 10);
+            scene.add(dirLight);
+
+            const floorGeo = new THREE.PlaneGeometry(60, 60);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            const boxMat = new THREE.MeshStandardMaterial({ color: 0x334155 });
+            for (let i = 0; i < 12; i++) {
+                const w = Math.random() * 3 + 2;
+                const h = Math.random() * 4 + 2;
+                const d = Math.random() * 3 + 2;
+                const boxGeo = new THREE.BoxGeometry(w, h, d);
+                const box = new THREE.Mesh(boxGeo, boxMat);
+                box.position.set((Math.random() - 0.5) * 45, h / 2, (Math.random() - 0.5) * 45);
+                scene.add(box);
+            }
+
+            for (let i = 0; i < 5; i++) {
+                spawnBot();
+            }
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2(0, 0);
+
+            window.addEventListener('keydown', onKeyDown);
+            window.addEventListener('keyup', onKeyUp);
+            renderer.domElement.addEventListener('click', shootGun);
+
+            animate();
+        }
+
+        function startGame() {
+            document.getElementById('gameOverlay').style.display = 'none';
+            document.getElementById('gameCrosshair').style.display = 'block';
+            renderer.domElement.requestPointerLock();
+        }
+
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement !== renderer?.domElement) {
+                document.getElementById('gameOverlay').style.display = 'flex';
+                document.getElementById('gameCrosshair').style.display = 'none';
+            }
+        });
+
+        let euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        document.addEventListener('mousemove', (event) => {
+            if (document.pointerLockElement === renderer?.domElement) {
+                const movementX = event.movementX || event.mozMovementX || 0;
+                const movementY = event.movementY || event.mozMovementY || 0;
+
+                euler.setFromQuaternion(camera.quaternion);
+                euler.y -= movementX * 0.003;
+                euler.x -= movementY * 0.003;
+                euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+                camera.quaternion.setFromEuler(euler);
+            }
+        });
+
+        function onKeyDown(e) {
+            if (e.code === 'KeyW') moveForward = true;
+            if (e.code === 'KeyS') moveBackward = true;
+            if (e.code === 'KeyA') moveLeft = true;
+            if (e.code === 'KeyD') moveRight = true;
+        }
+
+        function onKeyUp(e) {
+            if (e.code === 'KeyW') moveForward = false;
+            if (e.code === 'KeyS') moveBackward = false;
+            if (e.code === 'KeyA') moveLeft = false;
+            if (e.code === 'KeyD') moveRight = false;
+        }
+
+        function spawnBot() {
+            const botGeo = new THREE.SphereGeometry(1, 16, 16);
+            const botMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0x550000 });
+            const bot = new THREE.Mesh(botGeo, botMat);
+            bot.position.set((Math.random() - 0.5) * 40, 1, (Math.random() - 0.5) * 40);
+            scene.add(bot);
+            bots.push(bot);
+        }
+
+        function shootGun() {
+            if (document.pointerLockElement !== renderer.domElement) return;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(bots);
+
+            if (intersects.length > 0) {
+                const hitBot = intersects[0].object;
+                scene.remove(hitBot);
+                bots = bots.filter(b => b !== hitBot);
+                score++;
+                document.getElementById('score').innerText = score;
+                spawnBot();
+            }
+        }
+
+        function toggleFullscreen() {
+            let elem = document.getElementById("mainContainer");
+            if (!document.fullscreenElement) {
+                elem.requestFullscreen().catch(err => alert(`Hata: ${err.message}`));
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function animate() {
+            animId = requestAnimationFrame(animate);
+
+            const speed = 0.12;
+            let dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+            dir.y = 0;
+            dir.normalize();
+
+            let sideDir = new THREE.Vector3(-dir.z, 0, dir.x);
+
+            if (moveForward) camera.position.addScaledVector(dir, speed);
+            if (moveBackward) camera.position.addScaledVector(dir, -speed);
+            if (moveRight) camera.position.addScaledVector(sideDir, speed);
+            if (moveLeft) camera.position.addScaledVector(sideDir, -speed);
+
+            camera.position.x = Math.max(-28, Math.min(28, camera.position.x));
+            camera.position.z = Math.max(-28, Math.min(28, camera.position.z));
+            camera.position.y = 1.6;
+
+            bots.forEach(bot => {
+                const bDir = new THREE.Vector3().subVectors(camera.position, bot.position);
+                bDir.y = 0;
+                bDir.normalize();
+                bot.position.addScaledVector(bDir, 0.025);
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        initGame();
+    </script>
+</body>
+</html>
