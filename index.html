@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Taktik Nişan Oyunu - Pro Sürüm</title>
+    <title>3D Taktik Nişan Oyunu</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
@@ -90,7 +90,7 @@
             floor.rotation.x = -Math.PI / 2;
             scene.add(floor);
 
-            // Çarpışmalı Duvarlar (Labirent Engelleri)
+            // Çarpışmalı Duvarlar
             const wallMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.4 });
             const wallPositions = [
                 {x: -10, z: -10, w: 16, d: 2}, {x: 12, z: 12, w: 2, d: 16},
@@ -107,37 +107,32 @@
                 walls.push(wall);
             });
 
-            // --- DETAYLI 3D SİLAH VE GÖRÜNÜR MAĞAZA (ŞARJÖR) + İÇİNDEKİ MÜHİMMAT ---
+            // GÖRÜNÜR 3D SİLAH, MAĞAZA VE KURŞUNLAR
             gunGroup = new THREE.Group();
             const gunMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.9, roughness: 0.15 });
             
-            // Silah Gövdesi
             const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.85), gunMat);
             bodyMesh.position.set(0.25, -0.22, -0.5);
             gunGroup.add(bodyMesh);
 
-            // Namlu
             const barrelMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.45), gunMat);
             barrelMesh.rotation.x = Math.PI / 2;
             barrelMesh.position.set(0.25, -0.20, -0.95);
             gunGroup.add(barrelMesh);
 
-            // BELİRGİN ŞARJÖR (MAĞAZA)
             const magMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7, roughness: 0.3 });
             const magazine = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.16), magMat);
             magazine.position.set(0.25, -0.40, -0.42);
             magazine.rotation.x = 0.15;
             gunGroup.add(magazine);
 
-            // ŞARJÖRÜN İÇİNDEKİ GÖRÜNÜR KURŞUNLAR (PUL/MERMİ UÇLARI)
-            const bulletMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.9, roughness: 0.1 }); // Altın sarısı mermiler
+            const bulletMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.9, roughness: 0.1 });
             for(let i = 0; i < 3; i++) {
                 const bulletTip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.04), bulletMat);
                 bulletTip.position.set(0.25, -0.27 - (i * 0.07), -0.38);
                 gunGroup.add(bulletTip);
             }
 
-            // Arpacık / Nişangah
             const sightMesh = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.06, 0.04), gunMat);
             sightMesh.position.set(0.25, -0.12, -0.85);
             gunGroup.add(sightMesh);
@@ -145,7 +140,6 @@
             camera.add(gunGroup);
             scene.add(camera);
 
-            // Botları Oluştur
             for (let i = 0; i < 7; i++) {
                 spawnBot();
             }
@@ -209,19 +203,16 @@
         function spawnBot() {
             const botGroup = new THREE.Group();
             
-            // Bot Gövdesi
             const bodyMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.4 });
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.5), bodyMat);
             body.position.y = 0.6;
             botGroup.add(body);
 
-            // Bot Kafası
             const headMat = new THREE.MeshStandardMaterial({ color: 0xf87171 });
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), headMat);
             head.position.y = 1.45;
             botGroup.add(head);
 
-            // Rastgele konum (duvarların içine doğmasın diye basit döngü)
             let posX, posZ, safe = false;
             while(!safe) {
                 posX = (Math.random() - 0.5) * 60;
@@ -247,7 +238,6 @@
         function shootGun() {
             if (document.pointerLockElement !== renderer.domElement) return;
 
-            // Ateş Etme Geri Tepme Efekti
             gunGroup.position.z += 0.08;
             setTimeout(() => gunGroup.position.z -= 0.08, 70);
 
@@ -300,13 +290,11 @@
             if (moveRight) nextPos.addScaledVector(sideDir, speed);
             if (moveLeft) nextPos.addScaledVector(sideDir, -speed);
 
-            // Duvar Çarpışma Kontrolü (İçinden geçemez)
             if (!checkCollision(nextPos)) {
                 camera.position.x = nextPos.x;
                 camera.position.z = nextPos.z;
             }
 
-            // Yerçekimi ve Zıplama (Space)
             velocityY -= 0.007;
             camera.position.y += velocityY;
             if (camera.position.y <= 1.6) {
@@ -315,11 +303,9 @@
                 canJump = true;
             }
 
-            // Harita Sınırları
             camera.position.x = Math.max(-42, Math.min(42, camera.position.x));
             camera.position.z = Math.max(-42, Math.min(42, camera.position.z));
 
-            // Botların Hareketi ve Oyuncuyu Takibi
             bots.forEach(bot => {
                 const bDir = new THREE.Vector3().subVectors(camera.position, bot.position);
                 bDir.y = 0;
@@ -327,7 +313,6 @@
                 
                 let nextBotPos = bot.position.clone().addScaledVector(bDir, 0.02);
                 
-                // Botların da duvar içinden geçmesini engelle
                 const botBox = new THREE.Box3().setFromCenterAndSize(nextBotPos.clone().setY(1), new THREE.Vector3(0.8, 1.5, 0.8));
                 let botCollides = false;
                 for (let wall of walls) {
@@ -343,7 +328,6 @@
                 
                 bot.lookAt(camera.position.x, bot.position.y, camera.position.z);
 
-                // Oyuncuya Hasar Verme
                 if (bot.position.distanceTo(camera.position) < 1.4) {
                     health -= 0.3;
                     document.getElementById('health').innerText = Math.max(0, Math.floor(health));
